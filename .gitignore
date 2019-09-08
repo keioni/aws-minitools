@@ -1,0 +1,5 @@
+.venv/
+.stash/
+tmp/
+__pycache__/
+launch.json
