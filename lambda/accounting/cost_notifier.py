@@ -3,7 +3,6 @@ import datetime
 import json
 import os
 import urllib.request
-from collections import OrderedDict
 
 
 def notify_to_slack(cost, target_date, stat_type):
@@ -11,7 +10,7 @@ def notify_to_slack(cost, target_date, stat_type):
     return
   items = list()
   for k, v in sorted(cost.items()):
-    items.append('{}: {:.6f}'.format(k, float(v)))
+    items.append('{}: {:.2f}'.format(k, float(v)))
   sysenv = os.environ.get('SYSTEM_ENV', '')
   if stat_type == 'daily':
     msg = {
@@ -43,9 +42,10 @@ def normalize_result(resp):
   result = dict()
   for kv in resp['ResultsByTime'][0]['Groups']:
     service_name = kv['Keys'][0]
-    cost = kv['Metrics']['BlendedCost']['Amount']
-    if cost != '0':
+    cost = float(kv['Metrics']['BlendedCost']['Amount'])
+    if cost > 0.0:
       result[service_name] = cost
+  result['Amazon Elastic Compute Cloud - Compute'] += result.pop('EC2 - Other')
   return result
 
 def get_time_period(stat_type):
@@ -58,9 +58,10 @@ def get_time_period(stat_type):
     dt_start = datetime.datetime(
       dt_end.year, dt_end.month, 1, 0, 0, 0, 0
     )
-  time_period = OrderedDict()
-  time_period['Start'] = dt_start.strftime('%Y-%m-%d')
-  time_period['End'] = dt_end.strftime('%Y-%m-%d')
+  time_period = {
+    'Start': dt_start.strftime('%Y-%m-%d'),
+    'End': dt_end.strftime('%Y-%m-%d')
+  }
   return time_period
 
 def lambda_handler(event, context):
@@ -82,6 +83,12 @@ def lambda_handler(event, context):
   )
   p = normalize_result(resp)
   notify_to_slack(p, time_period, stat_type)
-  print(json.dumps(p, indent=2))
+  print(json.dumps(p))
+  return p
 
-lambda_handler(None, None)
+if __name__ == '__main__':
+  p = lambda_handler(None, None)
+  for k, v in sorted(p.items()):
+    v = float(v)
+    if v > 0.01:
+      print('{}: ${:.2f}'.format(k, v))
