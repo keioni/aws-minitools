@@ -60,19 +60,15 @@ def normalize_result(resp):
   return result
 
 def get_time_period(stat_type):
-  tz_jst = datetime.timezone(datetime.timedelta(hours=9))
+  TZ_JST = datetime.timezone(datetime.timedelta(hours=+9))
   if stat_type == 'daily':
-    dt_end = datetime.datetime.now(tz_jst)
+    dt_end = datetime.datetime.now(TZ_JST)
     dt_start = dt_end - datetime.timedelta(days=1)
   elif stat_type == 'month_cumulative':
-    dt_end = datetime.datetime.now(tz_jst)
+    dt_end = datetime.datetime.now(TZ_JST)
     dt_start = datetime.datetime(
-      dt_end.year, dt_end.month, 1, 0, 0, 0, 0
-    )
-  time_period = {
-    'Start': dt_start,
-    'End': dt_end
-  }
+      dt_end.year, dt_end.month, 1, 0, 0, 0, 0, TZ_JST)
+  time_period = {'Start': dt_start, 'End': dt_end}
   return time_period
 
 def lambda_handler(event, context):
