@@ -12,24 +12,26 @@ def notify_to_slack(cost, time_period, stat_type):
   for k, v in sorted(cost.items()):
     if k != 'AMOUNT':
       items.append('{}: ${:,.2f}'.format(k, v))
-  items.append('*AMOUNT: ${:,.2f}*'.format(cost['AMOUNT']))
+  amount_cost = '*AMOUNT: ${:,.2f}*'.format(cost['AMOUNT'])
   sysenv = os.environ.get('SYSTEM_ENV', '')
   if stat_type == 'daily':
     msg = {
-      "text": "*{} {} daily cost:*\n\n{}".format(
+      "text": "*{} {} daily cost:*\n\n{}\n\n{}".format(
         sysenv,
         time_period['Start'].strftime('%Y/%m/%d'),
-        '\n'.join(items)
+        '\n'.join(items),
+        amount_cost
       )
     }
   elif stat_type == 'month_cumulative':
     dt_yesterday = time_period['End'] - datetime.timedelta(days=1)
     msg = {
-      "text": "*{} monthly comulative cost ({} - {}):*\n\n{}".format(
+      "text": "*{} monthly comulative cost ({} - {}):*\n\n{}\n\n{}".format(
         sysenv,
         time_period['Start'].strftime('%Y/%m/%d'),
         dt_yesterday.strftime('%Y/%m/%d'),
-        '\n'.join(items)
+        '\n'.join(items),
+        amount_cost
       )
     }
   posting_data = ("payload=" + json.dumps(msg)).encode('utf-8')
