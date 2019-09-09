@@ -5,25 +5,30 @@ import os
 import urllib.request
 
 
-def notify_to_slack(cost, target_date, stat_type):
+def notify_to_slack(cost, time_period, stat_type):
   if not os.environ.get('WEBHOOK'):
     return
   items = list()
   for k, v in sorted(cost.items()):
-    items.append('{}: {:.2f}'.format(k, float(v)))
+    if k != 'AMOUNT':
+      items.append('{}: ${:,.2f}'.format(k, v))
+  items.append('*AMOUNT: ${:,.2f}*'.format(cost['AMOUNT']))
   sysenv = os.environ.get('SYSTEM_ENV', '')
   if stat_type == 'daily':
     msg = {
       "text": "*{} {} daily cost:*\n\n{}".format(
         sysenv,
-        target_date,
+        time_period['Start'].strftime('%Y/%m/%d'),
         '\n'.join(items)
       )
     }
   elif stat_type == 'month_cumulative':
+    dt_yesterday = time_period['End'] - datetime.timedelta(days=1)
     msg = {
-      "text": "*{}: monthly comulative cost:*\n\n{}".format(
+      "text": "*{} monthly comulative cost ({} - {}):*\n\n{}".format(
         sysenv,
+        time_period['Start'].strftime('%Y/%m/%d'),
+        dt_yesterday.strftime('%Y/%m/%d'),
         '\n'.join(items)
       )
     }
@@ -40,12 +45,16 @@ def notify_to_slack(cost, target_date, stat_type):
 
 def normalize_result(resp):
   result = dict()
+  amount_cost = 0.0
   for kv in resp['ResultsByTime'][0]['Groups']:
-    service_name = kv['Keys'][0]
     cost = float(kv['Metrics']['BlendedCost']['Amount'])
-    if cost > 0.0:
+    amount_cost += cost
+    if cost >= 0.01:
+      service_name = kv['Keys'][0]
       result[service_name] = cost
-  result['Amazon Elastic Compute Cloud - Compute'] += result.pop('EC2 - Other')
+  key_ec2 = 'Amazon Elastic Compute Cloud - Compute'
+  result[key_ec2] = result.get(key_ec2, 0) + result.pop('EC2 - Other')
+  result['AMOUNT'] = amount_cost
   return result
 
 def get_time_period(stat_type):
@@ -59,8 +68,8 @@ def get_time_period(stat_type):
       dt_end.year, dt_end.month, 1, 0, 0, 0, 0
     )
   time_period = {
-    'Start': dt_start.strftime('%Y-%m-%d'),
-    'End': dt_end.strftime('%Y-%m-%d')
+    'Start': dt_start,
+    'End': dt_end
   }
   return time_period
 
@@ -69,8 +78,11 @@ def lambda_handler(event, context):
   stat_type = os.environ.get('STAT_TYPE')
   time_period = get_time_period(stat_type)
   resp = client.get_cost_and_usage(
-    TimePeriod=time_period,
-    Granularity='DAILY',
+    TimePeriod={
+      'Start': time_period['Start'].strftime('%Y-%m-%d'),
+      'End': time_period['End'].strftime('%Y-%m-%d')
+    },
+    Granularity='MONTHLY',
     Metrics=[
       'BlendedCost'
     ],
