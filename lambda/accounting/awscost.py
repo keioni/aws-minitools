@@ -20,7 +20,7 @@ class AwsCostNotifier:
     def __call_ce_api(self):
         client = boto3.client('ce', 'us-east-1')
         stat_type = os.environ.get('STAT_TYPE')
-        time_period = get_time_period(stat_type)
+        time_period = self.get_time_period(stat_type)
         resp = client.get_cost_and_usage(
             TimePeriod=time_period,
             Granularity='DAILY',
@@ -73,10 +73,10 @@ class AwsCostNotifier:
                 '\n'.join(items)
                 )
             }
-        elif stat_type == 'month_cumulative':
+        elif self.stat_type == 'month_cumulative':
             msg = {
                 "text": "*{}: monthly comulative cost:*\n\n{}".format(
-                self.ysenv,
+                self.sysenv,
                 '\n'.join(items)
                 )
             }
@@ -95,7 +95,7 @@ class AwsCostNotifier:
         resp = self.__call_ce_api()
         self.__normalize_response(resp)
 
-    def to_jpy(self, usd_price):
-        request = urllib.request.Request(self.FOREX_RATE_API)
-        with urllib.request.urlopen(request) as response:
-            response_body = response.read().decode('utf-8')
+    # def to_jpy(self, usd_price):
+    #     request = urllib.request.Request(self.FOREX_RATE_API)
+    #     with urllib.request.urlopen(request) as response:
+    #         response_body = response.read().decode('utf-8')
