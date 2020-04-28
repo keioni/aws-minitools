@@ -69,7 +69,6 @@ class Route53Uptater:
         self.hosted_zone_id = os.environ['HostedZoneId']
         self.action = self.ACTIONS[state]
         self.get_params_from_tags(instance.tags)
-        self.host_name = 'moon.keys.jp.'
 
     def execute(self) -> Dict[str, Any]:
         res_record = self.get_record()
