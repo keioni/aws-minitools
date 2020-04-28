@@ -31,7 +31,20 @@ class Route53Uptater:
             if tag['Key'].lower() == 'identifier':
                 self.identifier = tag['Value'].lower()
 
-    def get_record(self) -> Dict[str, Any]:
+    def create_record(self) -> Dict[str, Any]:
+        res_record = {
+            'Name': self.host_name,
+            'Type': 'A',
+            'TTL': 300,
+            'ResourceRecords': [
+                {
+                    'Value': ''
+                }
+            ]
+        }
+        return res_record
+
+    def get_record(self) -> Optional[Dict[str, Any]]:
         client: boto3.client = boto3.client('route53')
         query_param: Dict[str, str] = {
             'HostedZoneId': self.hosted_zone_id,
@@ -42,6 +55,10 @@ class Route53Uptater:
         if self.identifier:
             query_param['StartRecordIdentifier'] = self.identifier
         res_record_sets: Dict[str, Any] = client.list_resource_record_sets(**query_param)
+        if not res_record_sets or res_record_sets['MaxItems'] == '0':
+            return None
+        if self.host_name != res_record_sets['ResourceRecordSets'][0]['Name']:
+            return None
         return res_record_sets['ResourceRecordSets'][0]
 
     def prepare(self, instance_id: str, state: str) -> None:
@@ -52,9 +69,12 @@ class Route53Uptater:
         self.hosted_zone_id = os.environ['HostedZoneId']
         self.action = self.ACTIONS[state]
         self.get_params_from_tags(instance.tags)
+        self.host_name = 'moon.keys.jp.'
 
     def execute(self) -> Dict[str, Any]:
         res_record = self.get_record()
+        if not res_record:
+            res_record = self.create_record()
         res_record['ResourceRecords'][0]['Value'] = self.ip_addr
         change_batch: Dict[str, Any] = {
             'Comment': 'updated by Route53Updater',
