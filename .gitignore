@@ -1,3 +1,5 @@
 .vscode/
 .stash/
 tmp/
+
+.mypy_cache/

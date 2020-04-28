@@ -1,7 +1,7 @@
 import json
 import os
 import sys
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, List
 from datetime import datetime
 
 import boto3
@@ -15,7 +15,7 @@ class Route53Uptater:
         self.identifier: str = ''
         self.ip_addr: str = ''
 
-    def get_params_from_instance_tags(self, tags: Dict[str, str]) -> None:
+    def get_params_from_instance_tags(self, tags: List[Dict[str, str]]) -> None:
         for tag in tags:
             if tag['Key'].lower() == 'hostname':
                 self.host_name = tag['Value'].lower()
@@ -26,7 +26,7 @@ class Route53Uptater:
                 self.identifier = tag['Value'].lower()
 
     def get_record(self, name: str, identifier: str = '') -> Dict[str, Any]:
-        client: Route53.Client = boto3.client('route53')
+        client: boto3.client = boto3.client('route53')
         query_param = {
             'HostedZoneId': os.environ.get('HostedZoneId', ''),
             'StartRecordName': self.host_name,
@@ -57,7 +57,7 @@ class Route53Uptater:
         }
         print("change_batch: " + json.dumps(change_batch, default=json_dt))
 
-        client: Route53.Client = boto3.client('route53')
+        client: boto3.client = boto3.client('route53')
         response = client.change_resource_record_sets(
             HostedZoneId=os.environ.get('HostedZoneId'),
             ChangeBatch=change_batch
@@ -69,14 +69,14 @@ def json_dt(o):
     if isinstance(o, datetime):
         return o.isoformat()
 
-def get_action(state: str) -> Optional[str]:
+def get_action(state: str) -> str:
     ACTIONS = {
         'running': 'UPSERT',
         'stopping': 'DELETE'
     }
-    return ACTIONS.get(state)
+    return ACTIONS['state']
 
-def lambda_handler(event, context):
+def lambda_handler(event, context) -> str:
     print('event: ' + json.dumps(event, default=json_dt))
 
     action = get_action(event['detail']['state'])
