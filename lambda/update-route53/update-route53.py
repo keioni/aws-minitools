@@ -55,7 +55,7 @@ class Route53Uptater:
         if self.identifier:
             query_param['StartRecordIdentifier'] = self.identifier
         res_record_sets: Dict[str, Any] = client.list_resource_record_sets(**query_param)
-        if not res_record_sets or res_record_sets['MaxItems'] == '0':
+        if not res_record_sets or res_record_sets.get('MaxItems', '0') == '0':
             return None
         if self.host_name != res_record_sets['ResourceRecordSets'][0]['Name']:
             return None
