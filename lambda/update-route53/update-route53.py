@@ -1,21 +1,27 @@
 import json
 import os
 import sys
-from typing import Any, Optional, Dict, List
+from typing import Any, Optional, Dict, List, Tuple
 from datetime import datetime
 
 import boto3
 
 
 class Route53Uptater:
+    ACTIONS = {
+        'running': 'UPSERT',
+        'stopping': 'DELETE'
+    }
 
-    def __init__(self, instance_id: str):
-        self.instance_id: str = instance_id
-        self.host_name: str = ''
-        self.identifier: str = ''
-        self.ip_addr: str = ''
+    def __init__(self):
+        self.instance_id: str
+        self.ip_addr: str
+        self.hosted_zone_id: str
+        self.action: str
+        self.host_name: str
+        self.identifier: str
 
-    def get_params_from_instance_tags(self, tags: List[Dict[str, str]]) -> None:
+    def get_params_from_tags(self, tags: List[Dict[str, str]]) -> None:
         for tag in tags:
             if tag['Key'].lower() == 'hostname':
                 self.host_name = tag['Value'].lower()
@@ -25,41 +31,43 @@ class Route53Uptater:
             if tag['Key'].lower() == 'identifier':
                 self.identifier = tag['Value'].lower()
 
-    def get_record(self, name: str, identifier: str = '') -> Dict[str, Any]:
+    def get_record(self) -> Dict[str, Any]:
         client: boto3.client = boto3.client('route53')
-        query_param = {
-            'HostedZoneId': os.environ.get('HostedZoneId', ''),
+        query_param: Dict[str, str] = {
+            'HostedZoneId': self.hosted_zone_id,
             'StartRecordName': self.host_name,
             'StartRecordType': 'A',
             'MaxItems': '1'
         }
         if self.identifier:
             query_param['StartRecordIdentifier'] = self.identifier
-        return client.list_resource_record_sets(**query_param)
+        res_record_sets: Dict[str, Any] = client.list_resource_record_sets(**query_param)
+        return res_record_sets['ResourceRecordSets'][0]
 
-    def prepare(self) -> None:
+    def prepare(self, instance_id: str, state: str) -> None:
         ec2: boto3.resource = boto3.resource('ec2')
-        instance: ec2.Instance = ec2.Instance(self.instance_id)
+        instance: ec2.Instance = ec2.Instance(instance_id)
+        self.instance_id = instance_id
         self.ip_addr = instance.public_ip_address
-        self.get_params_from_instance_tags(instance.tags)
+        self.hosted_zone_id = os.environ['HostedZoneId']
+        self.action = self.ACTIONS[state]
+        self.get_params_from_tags(instance.tags)
 
-    def execute(self, action: str) -> Dict[str, Any]:
-        record_sets = self.get_record(self.host_name, self.identifier)
-        record_set = record_sets['ResourceRecordSets'][0]
-        record_set['ResourceRecords'][0]['Value'] = self.ip_addr
-
-        change_batch = {
+    def execute(self) -> Dict[str, Any]:
+        res_record = self.get_record()
+        res_record['ResourceRecords'][0]['Value'] = self.ip_addr
+        change_batch: Dict[str, Any] = {
             'Comment': 'updated by Route53Updater',
             'Changes': [{
-                'Action': action,
-                'ResourceRecordSet': record_set
+                'Action': self.action,
+                'ResourceRecordSet': res_record
             }]
         }
         print("change_batch: " + json.dumps(change_batch, default=json_dt))
 
         client: boto3.client = boto3.client('route53')
-        response = client.change_resource_record_sets(
-            HostedZoneId=os.environ.get('HostedZoneId'),
+        response: Dict[str, Any] = client.change_resource_record_sets(
+            HostedZoneId=self.hosted_zone_id,
             ChangeBatch=change_batch
         )
         return response
@@ -69,22 +77,14 @@ def json_dt(o):
     if isinstance(o, datetime):
         return o.isoformat()
 
-def get_action(state: str) -> str:
-    ACTIONS = {
-        'running': 'UPSERT',
-        'stopping': 'DELETE'
-    }
-    return ACTIONS['state']
-
 def lambda_handler(event, context) -> str:
     print('event: ' + json.dumps(event, default=json_dt))
-
-    action = get_action(event['detail']['state'])
-
-    updater = Route53Uptater(event['detail']['instance-id'])
-    updater.prepare()
-    result = updater.execute(action)
-
+    updater = Route53Uptater()
+    updater.prepare(
+        event['detail']['instance-id'],
+        event['detail']['state']
+    )
+    result = updater.execute()
     print("result: " + json.dumps(result, default=json_dt))
     return json.dumps(result, default=json_dt)
 
