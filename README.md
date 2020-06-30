@@ -9,3 +9,8 @@ AWSの Cost Explorer を使って指定期間の費用を取得し、Slackで通
 
 ## securitygroup-manager
 Perlで書いたセキュリティグループの操作ツール。AWS CLI を活用するスタイルで、サクッと作ろうと思うとこの方法が一番楽なんですよね……。
+
+# Gist
+
+一部のサンプルコードは Gist にあります。
+https://gist.github.com/keioni
